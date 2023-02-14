@@ -30,11 +30,11 @@ int sorterChutes[] ={0,17, 33, 49, 66, 83, 99, 116, 132};
 int sorterQueue[QUEUE_LENGTH];
 
 
-bool autoHoming = false; //if true, then homing will be checked and adjusted on each feed cycle. Requires homing sensor.
+bool autoHoming = true; //if true, then homing will be checked and adjusted on each feed cycle. Requires homing sensor.
 
 //inputs which can be set via serial console like:  feedspeed:50 or sortspeed:60
 int feedSpeed = 60; //range: 1..100
-int feedSteps= 80; //range 1..1000 
+int feedSteps= 70; //range 1..1000 
 
 int sortSpeed = 50; //range: 1..100
 int sortSteps = 20; //range: 1..500 //20 default
@@ -71,11 +71,11 @@ void setup() {
   digitalWrite(FEED_TB6600Enable, HIGH);
   digitalWrite(SORT_TB6600Enable, HIGH);
   digitalWrite(FEED_DIRPIN, HIGH);
+  Serial.print("Ready\n");
  
 }
 
 void loop() {
-
 
     if(Serial.available() > 0 )  
     {
@@ -90,7 +90,6 @@ void loop() {
       if(parseSerialInput(input) == true){
         return;
       }
-
 
       int sortPosition = input.toInt();
       QueueAdd(sortPosition);
@@ -112,38 +111,30 @@ void testHomingSensor(){
     int value=digitalRead(FEED_HOMING_SENSOR);
     Serial.print(value);
     Serial.print("\n");
-   
     delay(50);
-    }
-  
   }
-void checkHoming(bool autoHome){
+}
 
-    if(autoHome ==true && autoHoming==false)
+void checkHoming(bool autoHome){
+   if(autoHome ==true && autoHoming==false)
       return;
 
    int homingSensorVal = digitalRead(FEED_HOMING_SENSOR);
-    Serial.print(homingSensorVal);
    if(homingSensorVal ==1){
     return; //we are homed! Continue
    }
-
    int i=0; //safety valve..
-  int offset = homingOffset * FEED_MICROSTEPS;
+   int offset = homingOffset * FEED_MICROSTEPS;
    while((homingSensorVal == 0 && i<12000) || offset >0){
       runFeedMotor(1);
       //delay(2); //uncomment to slow down the rough homing stage
       homingSensorVal = digitalRead(FEED_HOMING_SENSOR);
       i++;
-     
       if(homingSensorVal==1){
         offset--;
-       // delay(10); //uncomment to slow down the fine homing stage
-        
+       // delay(10); //uncomment to slow down the fine homing stage    
       }
    }
-  
-  
 }
 
 //moves the sorter arm. Blocking operation until complete
@@ -200,9 +191,7 @@ void runFeedMotorManual(){
 }
 
 void runFeedMotor(int steps){
-
   digitalWrite(FEED_DIRPIN, LOW);
- 
   int delayTime = 120 - feedSpeed; //assuming a feedspeed variable between 0 and 100. a delay of less than 20ms is too fast so 20mcs should be minimum delay for fastest speed.
   
   for(int i=0;i<steps;i++){
@@ -211,8 +200,6 @@ void runFeedMotor(int steps){
       digitalWrite(FEED_STEPPIN, LOW);
       delayMicroseconds(delayTime); //speed 156 = 1 second per revolution
   }
-  
- 
 }
 
 
@@ -304,15 +291,32 @@ bool parseSerialInput(String input)
       if(input.startsWith("sortsteps:")){
          input.replace("sortsteps:","");
          sortSteps= input.toInt();
-          Serial.print("ok\n");
+         Serial.print("ok\n");
          return true;
+      }
+
+      if(input.startsWith("getconfig")){
+          Serial.print("{\"FeedMotorSpeed\":");
+          Serial.print(feedSpeed);
+  
+          Serial.print(",\"FeedCycleSteps\":");
+          Serial.print(feedSteps);
+  
+          Serial.print(",\"SortMotorSpeed\":");
+          Serial.print(sortSpeed);
+  
+          Serial.print(",\"SortSteps\":");
+          Serial.print(sortSteps);
+  
+          Serial.print("}\n");
+          return true;
       }
 
       //set feed steps. Values 1-1000. Def 100
       if(input.startsWith("feedsteps:")){
          input.replace("feedsteps:","");
          feedSteps= input.toInt();
-          Serial.print("ok\n");
+         Serial.print("ok\n");
          return true;
       }
 
@@ -320,7 +324,7 @@ bool parseSerialInput(String input)
       if(input.startsWith("feedpausetime:")){
          input.replace("feedpausetime:","");
          feedPauseTime= input.toInt();
-          Serial.print("ok\n");
+         Serial.print("ok\n");
          return true;
       }
 
@@ -328,13 +332,13 @@ bool parseSerialInput(String input)
       if(input.startsWith("autohome:")){
          input.replace("autohome:","");
          input.replace(" ", "");
-          autoHoming = input == "1";
-          Serial.print("ok\n");
+         autoHoming = input == "1";
+         Serial.print("ok\n");
          return true;
       }
 
       //to change sorter arm position, send sortto:1, sortto:2.. 10, etc. 
-       if(input.startsWith("sortto:")){
+      if(input.startsWith("sortto:")){
          input.replace("sortto:","");
          int msortsteps= input.toInt();
          runSorterMotor(msortsteps);
@@ -362,13 +366,15 @@ bool parseSerialInput(String input)
       }
       
       //to run feeder, send  any string starting with f:
-       if(input.startsWith("f")){
+      if(input.startsWith("f")){
          input.replace("f","");
          int fs=input.toInt();
          runFeedMotor(fs);
          Serial.print("done\n");
          return true;
       }
+
+    
 
       return false; //nothing matched, continue processing the loop at normal
 }

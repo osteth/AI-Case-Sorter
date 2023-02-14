@@ -35,4 +35,6 @@ or:
 - (1) 5.55x25.4 extension spring
 - (1) 9.1x34.9 compression spring
 
-(1) [Micro Limit Switch](https://www.amazon.com/gp/product/B07PCN6T6F)
+(1) [Micro Limit Switch (homing sensor)](https://www.amazon.com/gp/product/B07PCN6T6F)
+
+(1) [12v 5amp Power Supply](https://www.amazon.com/gp/product/B01GEA8PQA)

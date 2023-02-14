@@ -10,7 +10,7 @@
 #define FEED_Enable 8
 #define FEED_MICROSTEPS 16
 #define FEED_HOMING_SENSOR 10
-#define HOMING_SENSOR_POWER 9
+#define FEED_SENSOR 9
 
 #define SORT_MICROSTEPS 16 
 #define SORT_DIRPIN 6
@@ -18,6 +18,10 @@
 #define SORT_Enable 8
 
 #define SORTER_CHUTE_SEPERATION 20 //number of steps between chutes
+
+bool useFeedSensor = false; //if true the system will not feed until the sensor detects a peice of brass on top of it
+bool autoHoming = true; //if true, then homing will be checked and adjusted on each feed cycle. Requires homing sensor.
+int homingOffset = 5; //requires: autoHoming:true - the number of steps to continue traveling after homing sensor activated
 
 //not used but could be if you wanted to specify exact positions. 
 //referenced in the commented out code in the runsorter method below
@@ -28,9 +32,6 @@ int sorterChutes[] ={0,17, 33, 49, 66, 83, 99, 116, 132};
 #define QUEUE_LENGTH 2 //usually 1 but it is the positional distance between your camera and the sorter.
 #define PRINT_QUEUEINFO false  //used for debugging in serial monitor. prints queue info
 int sorterQueue[QUEUE_LENGTH];
-
-
-bool autoHoming = true; //if true, then homing will be checked and adjusted on each feed cycle. Requires homing sensor.
 
 //inputs which can be set via serial console like:  feedspeed:50 or sortspeed:60
 int feedSpeed = 30; //range: 1..100
@@ -50,12 +51,14 @@ int motorPulseDelay = 240;
 int feedMicroSteps = 0; // how many microsteps between feeds - 0 to disable.
 int feedFactionalStep = 1; //this allows you to add a micro step every [fractionInterval]. 
 int feedFractionInterval = 3; //the interval at which micro steps get added. 
+
+
 //END FEED STEP OVERRIDES
 
 //tracking variables
 int sorterMotorCurrentPosition = 0;
 bool isHomed=true;
-int homingOffset = 7;
+
 
 void setup() {
   
@@ -69,17 +72,21 @@ void setup() {
   pinMode(SORT_STEPPIN, OUTPUT);
   
   pinMode(FEED_HOMING_SENSOR, INPUT); 
-  pinMode(HOMING_SENSOR_POWER, OUTPUT);
-  digitalWrite(HOMING_SENSOR_POWER, HIGH);
+  pinMode(FEED_SENSOR, INPUT);
+  //digitalWrite(HOMING_SENSOR_POWER, HIGH);
   
   digitalWrite(FEED_Enable, HIGH);
   digitalWrite(SORT_Enable, HIGH);
   digitalWrite(FEED_DIRPIN, HIGH);
+
+  Serial.print("Ready\n");
  
 }
 
 void loop() {
- digitalWrite(HOMING_SENSOR_POWER, HIGH);
+ //digitalWrite(HOMING_SENSOR_POWER, HIGH);
+      //int sensorVal = digitalRead(FEED_SENSOR);
+      //Serial.println(sensorVal);
 
     if(Serial.available() > 0 )  
     {
@@ -127,7 +134,7 @@ void checkHoming(bool autoHome){
       return;
 
    int homingSensorVal = digitalRead(FEED_HOMING_SENSOR);
-   // Serial.print(homingSensorVal);
+
    if(homingSensorVal ==1){
     return; //we are homed! Continue
    }
@@ -136,12 +143,12 @@ void checkHoming(bool autoHome){
    int offset = homingOffset * FEED_MICROSTEPS;
    while((homingSensorVal == 0 && i<12000) || offset >0){
       runFeedMotor(1);
-      //delay(2);
+
       homingSensorVal = digitalRead(FEED_HOMING_SENSOR);
       i++;
       if(homingSensorVal==1){
         offset--;
-       // delay(10);
+
         
       }
    }
@@ -168,6 +175,13 @@ void runSorterMotor(int chute){
 int fractionIntervalIndex =0;
 
 void runFeedMotorManual(){
+
+  if(useFeedSensor){
+      while(digitalRead(FEED_SENSOR) != 0){
+       delay(50);
+     }
+     //Serial.println(sensorVal);
+  }
   int steps=0;
 
   //if the feedMicroSteps override is used, we do that and return.
@@ -202,19 +216,14 @@ void runFeedMotorManual(){
 }
 
 void runFeedMotor(int steps){
-
   digitalWrite(FEED_DIRPIN, LOW);
- 
   int delayTime = motorPulseDelay - feedSpeed; //assuming a feedspeed variable between 0 and 100. a delay of less than 20ms is too fast so 20mcs should be minimum delay for fastest speed.
-  
   for(int i=0;i<steps;i++){
       digitalWrite(FEED_STEPPIN, HIGH);
       delayMicroseconds(60);   //pulse. i have found 60 to be very consistent with tb6600. Noticed that faster pulses tend to drop steps. 
       digitalWrite(FEED_STEPPIN, LOW);
       delayMicroseconds(delayTime); //speed 156 = 1 second per revolution
   }
-  
- 
 }
 
 
@@ -286,6 +295,7 @@ bool parseSerialInput(String input)
          for(int a=0;a<testcount;a++)
          {
            runFeedMotorManual();
+           checkHoming(true);
             Serial.print(a);
             Serial.print("\n");
           delay(60);
@@ -370,6 +380,23 @@ bool parseSerialInput(String input)
          int fs=input.toInt();
          runFeedMotor(fs);
          Serial.print("done\n");
+         return true;
+      }
+       if(input.startsWith("getconfig")){
+              Serial.print("{\"FeedMotorSpeed\":");
+              Serial.print(feedSpeed);
+
+              Serial.print(",\"FeedCycleSteps\":");
+              Serial.print(feedSteps);
+
+              Serial.print(",\"SortMotorSpeed\":");
+              Serial.print(sortSpeed);
+
+              Serial.print(",\"SortSteps\":");
+              Serial.print(sortSteps);
+
+              Serial.print("}\n");
+
          return true;
       }
 
